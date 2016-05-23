@@ -87,6 +87,10 @@
             
             // 成员变量名转为属性名（去掉下划线 _ ）
             key = [key substringFromIndex:1];
+            
+            if (!dict[key] || [dict[key] isKindOfClass:[NSNull class]]) {
+                continue;
+            }
             // 取出字典的值
             id value = dict[key];
             
@@ -107,25 +111,38 @@
                     Class class = NSClassFromString(type);
                     value = [class objectWithDict:value];
                     
-                }else if ([type isEqualToString:@"NSArray"]) {
+                }else if ([type isEqualToString:@"NSArray"] || [type isEqualToString:@"NSMutableArray"]) {
+                    
                     
                     // 如果是数组类型，将数组中的每个模型进行字典转模型，先创建一个临时数组存放模型
-                    NSArray *array = (NSArray *)value;
+                    NSMutableArray *array = [(NSArray *)value mutableCopy];
                     NSMutableArray *mArray = [NSMutableArray array];
                     
-                    // 获取到每个模型的类型
-                    id class ;
-                    if ([self respondsToSelector:@selector(arrayObjectClass)]) {
+                    if ([self respondsToSelector:@selector(objectClassInArray)]) {
                         
-                        NSString *classStr = [[self arrayObjectClass] objectForKey:key];
-                        class = NSClassFromString(classStr);
+                        id class ;
+                        // 获取到每个模型的类型
+                        
+                        if ([[self objectClassInArray] objectForKey:key]) {
+                            if (![[[self objectClassInArray] objectForKey:key] isKindOfClass:[NSNull class]]) {
+                                class = [[self objectClassInArray] objectForKey:key];
+                                
+                                for (int i = 0; i < array.count; i++) {
+                                    [mArray addObject:[class objectWithDict:value[i]]];
+                                }
+                                value = mArray;
+                                
+                            }else{
+                                value = array;
+                                NSLog(@"--【%@】--#warning:没有检测到以%@命名的数组内元素相匹配的数据类型", NSStringFromClass(c), key);
+                            }
+                        }else{
+                            value = array;
+                            NSLog(@"--【%@】--#warning:没有检测到以%@命名的数组内元素相匹配的数据类型", NSStringFromClass(c), key);
+                        }
+                    }else{
+                        value = array;
                     }
-                    // 将数组中的所有模型进行字典转模型
-                    for (int i = 0; i < array.count; i++) {
-                        [mArray addObject:[class objectWithDict:value[i]]];
-                    }
-                    
-                    value = mArray;
                 }
             }
             
@@ -138,7 +155,7 @@
 }
 
 // 告诉数组中都是什么类型的模型对象
-- (NSDictionary *)arrayObjectClass
+- (NSDictionary *)objectClassInArray
 {
     return @{};
 }
